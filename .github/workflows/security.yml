@@ -2,9 +2,9 @@ name: Security Scan
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
   schedule:
     # 毎週月曜 9:00 JST（0:00 UTC）に実行
     - cron: '0 0 * * 1'
