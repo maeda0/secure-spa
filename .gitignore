@@ -25,6 +25,7 @@ cdk/*.js
 
 # TypeScript
 *.d.ts
+!frontend/src/vite-env.d.ts
 *.js
 !*.config.js
 !.eslintrc.js
