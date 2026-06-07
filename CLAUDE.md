@@ -130,3 +130,10 @@ const { SecretString } = await client.send(
 - セキュリティチェックリスト詳細 → `.claude/claude-security-guidance.md`
 - チーム向けポリシー → `docs/security/policy.md`
 - レビューチェックリスト → `docs/security/checklist.md`
+
+---
+
+## 組織コンテキスト（自動ロード）
+
+@.company/research/topics/asvs-l2-tool-selection.md
+@.company/research/topics/github-actions-oidc-aws.md
