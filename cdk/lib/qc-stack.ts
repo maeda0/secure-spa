@@ -93,7 +93,7 @@ export class QcDashboardStack extends cdk.Stack {
     // ─── 読み取り API Lambda ──────────────────────────────────────
     // GitHub Pages の URL（デプロイ後に実際の URL に変更する）
     // CORS origin must be scheme+host only (no path); derive it from the full Pages URL
-    const githubPagesUrl: string = this.node.tryGetContext('githubPagesUrl') ?? 'https://YOUR_USERNAME.github.io'
+    const githubPagesUrl: string = this.node.tryGetContext('githubPagesUrl') ?? 'http://localhost:5173'
     let allowedOrigin: string
     try {
       allowedOrigin = new URL(githubPagesUrl).origin
