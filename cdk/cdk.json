@@ -44,6 +44,6 @@
     "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
     "@aws-cdk/aws-stepfunctions-tasks:httpsParameterNames": true,
     "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false,
-    "githubPagesUrl": "https://YOUR_GITHUB_USERNAME.github.io"
+    "githubPagesUrl": "http://localhost:5173"
   }
 }

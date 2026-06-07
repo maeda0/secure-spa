@@ -117,14 +117,14 @@ export class QcDashboardStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
     })
 
-    table.grantReadData(apiFn)
+    table.grantReadWriteData(apiFn)
 
     const apiUrl = apiFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
       cors: {
-        // ★ GitHub Pages オリジンのみ許可（* 禁止）
+        // ★ localhost オリジンのみ許可（* 禁止）
         allowedOrigins: [allowedOrigin],
-        allowedMethods: [lambda.HttpMethod.GET],
+        allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST],
         allowedHeaders: ['Content-Type', 'Authorization'],
         allowCredentials: true,
       },
@@ -138,7 +138,7 @@ export class QcDashboardStack extends cdk.Stack {
     NagSuppressions.addResourceSuppressions(apiUrl, [
       {
         id: 'AwsSolutions-FU1',
-        reason: 'Read-only API; CORS restricted to GitHub Pages origin only',
+        reason: 'Read/write API; CORS restricted to localhost origin only',
       },
     ])
 

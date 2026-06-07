@@ -1,21 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
-import type { QcReviewRecord, Verdict } from './types'
+import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue } from './types'
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}))
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? ''
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Credentials': 'true',
-}
 
 const respond = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json', ...corsHeaders },
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body),
 })
 
@@ -60,6 +52,50 @@ const calcStats = (reviews: QcReviewRecord[]): Stats => {
   return { total, verdicts, categories, passRate }
 }
 
+// ─── POST body validation ─────────────────────────────────────────
+
+const VALID_VERDICTS: readonly Verdict[] = ['PASS', 'WARN', 'FAIL']
+const VALID_CATS = ['xss', 'auth', 'secrets', 'typescript', 'infra'] as const
+
+interface PostReviewBody {
+  repo: string
+  prNumber: number
+  prTitle: string
+  prAuthor: string
+  verdict: Verdict
+  categories: ReviewCategories
+  issues?: ReviewIssue[]
+  reviewComment?: string
+}
+
+const validatePostBody = (body: unknown): PostReviewBody | null => {
+  if (!body || typeof body !== 'object') return null
+  const b = body as Record<string, unknown>
+
+  if (typeof b.repo !== 'string' || !/^[\w.-]+\/[\w.-]+$/.test(b.repo)) return null
+  if (typeof b.prNumber !== 'number' || !Number.isInteger(b.prNumber) || b.prNumber < 1) return null
+  if (typeof b.prTitle !== 'string' || b.prTitle.length === 0) return null
+  if (typeof b.prAuthor !== 'string' || b.prAuthor.length === 0) return null
+  if (!(VALID_VERDICTS as readonly unknown[]).includes(b.verdict)) return null
+
+  const cats = b.categories as Record<string, unknown>
+  if (!cats || typeof cats !== 'object') return null
+  for (const cat of VALID_CATS) {
+    if (!(VALID_VERDICTS as readonly unknown[]).includes(cats[cat])) return null
+  }
+
+  return {
+    repo: b.repo,
+    prNumber: b.prNumber,
+    prTitle: b.prTitle,
+    prAuthor: b.prAuthor,
+    verdict: b.verdict as Verdict,
+    categories: b.categories as ReviewCategories,
+    issues: Array.isArray(b.issues) ? (b.issues as ReviewIssue[]) : [],
+    reviewComment: typeof b.reviewComment === 'string' ? b.reviewComment : '',
+  }
+}
+
 // ─── Handler ─────────────────────────────────────────────────────
 
 export const handler = async (
@@ -67,7 +103,42 @@ export const handler = async (
 ): Promise<APIGatewayProxyResultV2> => {
   const method = event.requestContext.http.method
 
-  if (method === 'OPTIONS') return respond(200, {})
+  // CC 手動レビュー結果を DynamoDB に保存
+  if (method === 'POST') {
+    let rawBody: unknown
+    try {
+      rawBody = JSON.parse(event.body ?? '{}')
+    } catch {
+      return err(400)
+    }
+
+    const data = validatePostBody(rawBody)
+    if (!data) return err(400)
+
+    const reviewedAt = new Date().toISOString()
+    const record: QcReviewRecord = {
+      PK: `REPO#${data.repo}`,
+      SK: `PR#${data.prNumber}#${reviewedAt}`,
+      verdict: data.verdict,
+      categories: data.categories,
+      issues: data.issues ?? [],
+      prNumber: data.prNumber,
+      prTitle: data.prTitle,
+      prAuthor: data.prAuthor,
+      repoFullName: data.repo,
+      reviewedAt,
+      reviewComment: data.reviewComment ?? '',
+    }
+
+    try {
+      await dynamo.send(new PutCommand({ TableName: process.env.TABLE_NAME!, Item: record }))
+    } catch {
+      return err(500)
+    }
+
+    return respond(201, { message: 'saved', sk: record.SK })
+  }
+
   if (method !== 'GET') return err(405)
 
   const params = event.queryStringParameters ?? {}
