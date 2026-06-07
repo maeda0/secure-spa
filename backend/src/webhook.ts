@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb'
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager'
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm'
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import type {
   CcReviewData,
@@ -10,7 +10,7 @@ import type {
 } from './types'
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}))
-const secrets = new SecretsManagerClient({})
+const ssmClient = new SSMClient({})
 
 // 起動時にシークレットをキャッシュ（コールドスタート時のみ取得）
 let cachedWebhookSecret: string | null = null
@@ -18,12 +18,15 @@ let cachedWebhookSecret: string | null = null
 const getWebhookSecret = async (): Promise<string> => {
   if (cachedWebhookSecret) return cachedWebhookSecret
 
-  const { SecretString } = await secrets.send(
-    new GetSecretValueCommand({ SecretId: process.env.WEBHOOK_SECRET_NAME! })
+  const { Parameter } = await ssmClient.send(
+    new GetParameterCommand({
+      Name: process.env.WEBHOOK_SECRET_PATH!,
+      WithDecryption: true,
+    })
   )
-  if (!SecretString) throw new Error('Webhook secret not found')
+  if (!Parameter?.Value) throw new Error('Webhook secret not found')
 
-  cachedWebhookSecret = SecretString
+  cachedWebhookSecret = Parameter.Value
   return cachedWebhookSecret
 }
 

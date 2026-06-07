@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib'
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as iam from 'aws-cdk-lib/aws-iam'
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as logs from 'aws-cdk-lib/aws-logs'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
@@ -16,7 +16,9 @@ export class QcDashboardStack extends cdk.Stack {
       tableName: 'qc-reviews',
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey:      { name: 'SK', type: dynamodb.AttributeType.STRING },
-      billingMode:  dynamodb.BillingMode.PAY_PER_REQUEST,
+      billingMode:  dynamodb.BillingMode.PROVISIONED,
+      readCapacity:  5,
+      writeCapacity: 5,
       encryption:   dynamodb.TableEncryption.AWS_MANAGED,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -29,20 +31,13 @@ export class QcDashboardStack extends cdk.Stack {
       sortKey:      { name: 'reviewedAt', type: dynamodb.AttributeType.STRING },
     })
 
-    // ─── Secrets Manager ────────────────────────────────────────
-    // CDK が自動作成。cdk deploy 後に AWS コンソールで値を設定する
-    const webhookSecret = new secretsmanager.Secret(this, 'GitHubWebhookSecret', {
-      secretName: 'qc-dashboard/github-webhook-secret',
+    // ─── SSM Parameter Store ─────────────────────────────────────
+    // SecureString は CDK では値を設定できないため、ダミー値で作成後に手動更新する
+    const webhookSecretParam = new ssm.StringParameter(this, 'WebhookSecretParam', {
+      parameterName: '/qc-dashboard/github-webhook-secret',
       description: 'GitHub Webhook HMAC-SHA256 署名検証用シークレット',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      stringValue: 'PLACEHOLDER_REPLACE_AFTER_DEPLOY',
     })
-
-    NagSuppressions.addResourceSuppressions(webhookSecret, [
-      {
-        id: 'AwsSolutions-SMG4',
-        reason: 'Webhook シークレットはローテーション不要（手動で設定する静的値）',
-      },
-    ])
 
     // ─── Lambda ─────────────────────────────────────────────────
     const webhookFn = new lambda.Function(this, 'WebhookHandler', {
@@ -55,7 +50,7 @@ export class QcDashboardStack extends cdk.Stack {
       memorySize: 256,
       environment: {
         TABLE_NAME: table.tableName,
-        WEBHOOK_SECRET_NAME: webhookSecret.secretName,
+        WEBHOOK_SECRET_PATH: webhookSecretParam.parameterName,
         NODE_OPTIONS: '--enable-source-maps',
       },
       // 構造化ログ
@@ -65,7 +60,7 @@ export class QcDashboardStack extends cdk.Stack {
     // Lambda に必要最小限の権限のみ付与
     table.grantWriteData(webhookFn)
 
-    webhookSecret.grantRead(webhookFn)
+    webhookSecretParam.grantRead(webhookFn)
 
     // ─── Lambda Function URL ─────────────────────────────────────
     const fnUrl = webhookFn.addFunctionUrl({
@@ -169,8 +164,8 @@ export class QcDashboardStack extends cdk.Stack {
       description: 'DynamoDB テーブル名',
     })
 
-    new cdk.CfnOutput(this, 'WebhookSecretArn', {
-      value: webhookSecret.secretArn,
+    new cdk.CfnOutput(this, 'WebhookSecretPath', {
+      value: webhookSecretParam.parameterName,
       description: 'cdk deploy 後にここへ GitHub Webhook シークレット値を設定する',
     })
   }
