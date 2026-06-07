@@ -1,0 +1,93 @@
+name: CC Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            このPRの変更差分をセキュリティ・品質の観点でレビューしてください。
+            CLAUDE.md の禁止事項・必須事項を基準として使用します。
+
+            以下の各カテゴリをチェックし、結果を出力してください：
+
+            ## チェック項目
+
+            ### 1. XSS / テンプレートインジェクション
+            - `v-html` に未サニタイズの入力が渡されていないか
+            - DOMPurify.sanitize() を通しているか
+            - eval() / innerHTML の直接使用がないか
+
+            ### 2. 認証・認可
+            - JWT の検証が Lambda（サーバーサイド）で行われているか
+            - 全 API エンドポイントに認可チェックがあるか
+            - 認証トークンが localStorage に保存されていないか
+            - 認証不要エンドポイントに `// PUBLIC:` コメントがあるか
+
+            ### 3. シークレット管理
+            - APIキー・シークレット・パスワードがハードコードされていないか
+            - `VITE_` 環境変数にシークレットが含まれていないか
+            - `console.log` に個人情報・認証情報が出力されていないか
+
+            ### 4. TypeScript 型安全
+            - `any` 型が使われていないか
+            - 外部データ（APIレスポンス・URLパラメータ）に zod バリデーションがあるか
+
+            ### 5. インフラ（CDK / AWS）
+            - Lambda Function URL の CORS に `*` が設定されていないか
+            - IAM ポリシーに `"Action": "*"` または `"Resource": "*"` がないか
+
+            ## 出力フォーマット
+
+            コメントの末尾に必ず以下の2つのブロックを含めてください。
+
+            ### 1. 人間向けレビュー結果（Markdown テーブル）
+
+            ## CC セキュリティレビュー結果
+
+            | カテゴリ | 判定 | 詳細 |
+            |---------|------|------|
+            | XSS / テンプレートインジェクション | ✅ PASS / ⚠️ WARN / ❌ FAIL | ... |
+            | 認証・認可 | ✅ PASS / ⚠️ WARN / ❌ FAIL | ... |
+            | シークレット管理 | ✅ PASS / ⚠️ WARN / ❌ FAIL | ... |
+            | TypeScript 型安全 | ✅ PASS / ⚠️ WARN / ❌ FAIL | ... |
+            | インフラ | ✅ PASS / ⚠️ WARN / ❌ FAIL | ... |
+
+            ### 総合判定: ✅ PASS / ⚠️ WARN / ❌ FAIL
+
+            ### 指摘事項
+            （問題がある場合のみ、file:line形式で記載）
+
+            ### 2. システム向けデータブロック（必ず含める・変更不可）
+
+            <!-- CC_REVIEW_DATA
+            {
+              "verdict": "PASS または WARN または FAIL",
+              "categories": {
+                "xss": "PASS または WARN または FAIL",
+                "auth": "PASS または WARN または FAIL",
+                "secrets": "PASS または WARN または FAIL",
+                "typescript": "PASS または WARN または FAIL",
+                "infra": "PASS または WARN または FAIL"
+              },
+              "issues": [
+                { "file": "src/example.ts", "line": 42, "message": "問題の説明", "category": "auth" }
+              ]
+            }
+            -->
+
+            変更がない項目は PASS として扱い、issues は空配列にしてください。

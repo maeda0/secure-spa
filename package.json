@@ -1,0 +1,25 @@
+{
+  "name": "secure-spa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "lint-staged": {
+    "frontend/src/**/*.{ts,vue}": [
+      "eslint --fix",
+      "bash -c 'cd frontend && npx tsc --noEmit'"
+    ],
+    "backend/src/**/*.ts": [
+      "eslint --fix",
+      "bash -c 'cd backend && npx tsc --noEmit'"
+    ],
+    "cdk/**/*.ts": [
+      "bash -c 'cd cdk && npx tsc --noEmit'"
+    ]
+  }
+}

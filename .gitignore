@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+cdk.out/
+*.js.map
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+
+# CDK
+cdk/cdk.out/
+cdk/*.d.ts
+cdk/*.js
+!cdk/jest.config.js
+
+# TypeScript
+*.d.ts
+*.js
+!*.config.js
+!.eslintrc.js
+
+# Backend compiled output
+backend/dist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/settings.json.local
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Secrets (extra safety net — should never reach here)
+*.pem
+*.key
+*.p12
+credentials.json
+service-account.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Husky
+.husky/_/
