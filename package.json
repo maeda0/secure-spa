@@ -7,7 +7,7 @@
   },
   "devDependencies": {
     "husky": "^9.0.0",
-    "lint-staged": "^15.0.0"
+    "lint-staged": "^17.0.7"
   },
   "lint-staged": {
     "frontend/src/**/*.{ts,vue}": [
