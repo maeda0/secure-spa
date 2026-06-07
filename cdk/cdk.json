@@ -45,6 +45,6 @@
     "@aws-cdk/aws-stepfunctions-tasks:httpsParameterNames": true,
     "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false,
     "githubPagesUrl": "http://localhost:5173",
-    "apiLambdaUrl": "https://uxg74uskjmjrd4t6g5j4cihwlm0pxxkh.lambda-url.ap-northeast-1.on.aws/"
+    "apiGatewayUrl": "https://o792vyecg9.execute-api.ap-northeast-1.amazonaws.com/v1/"
   }
 }

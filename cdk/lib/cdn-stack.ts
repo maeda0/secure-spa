@@ -11,12 +11,15 @@ export class CdnStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
 
-    // context から API Lambda URL を読み込む
-    const apiLambdaUrl: string =
-      this.node.tryGetContext('apiLambdaUrl') ??
-      'https://uxg74uskjmjrd4t6g5j4cihwlm0pxxkh.lambda-url.ap-northeast-1.on.aws/'
+    // context から API Gateway URL を読み込む
+    const apiGatewayUrl: string =
+      this.node.tryGetContext('apiGatewayUrl') ??
+      'https://o792vyecg9.execute-api.ap-northeast-1.amazonaws.com/v1/'
 
-    const apiOriginDomain = new URL(apiLambdaUrl).host
+    const parsedUrl = new URL(apiGatewayUrl)
+    const apiOriginDomain = parsedUrl.host
+    // API Gateway の stage path (/v1) を origin path に設定
+    const apiOriginPath = parsedUrl.pathname.replace(/\/$/, '') || undefined
 
     // ─── WAF Web ACL ─────────────────────────────────────────────
     // CloudFront 用 WAF は us-east-1 のみ作成可能（scope: CLOUDFRONT）
@@ -85,9 +88,10 @@ export class CdnStack extends cdk.Stack {
     const distribution = new cloudfront.Distribution(this, 'ApiDistribution', {
       comment: 'QC Dashboard API CDN with WAF',
       defaultBehavior: {
-        // API Lambda URL をオリジンに設定
+        // API Gateway をオリジンに設定（/v1 stage を origin path で指定）
         origin: new origins.HttpOrigin(apiOriginDomain, {
           protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          originPath: apiOriginPath,
         }),
         allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
         // API はキャッシュ不要（常に Lambda に転送）
@@ -109,7 +113,7 @@ export class CdnStack extends cdk.Stack {
     // ─── Outputs ─────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'CloudFrontUrl', {
       value: this.distributionUrl,
-      description: 'VITE_API_BASE_URL に設定する CloudFront URL',
+      description: 'VITE_API_BASE_URL に設定する CloudFront URL（API Gateway へのプロキシ）',
     })
 
     new cdk.CfnOutput(this, 'DistributionId', {

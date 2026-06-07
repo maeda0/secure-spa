@@ -1,17 +1,28 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
-import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
+import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
 import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue } from './types'
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}))
 
-const respond = (statusCode: number, body: unknown): APIGatewayProxyResultV2 => ({
+// API Gateway は OPTIONS を mock で処理するため Lambda には到達しない
+// GET/POST では Lambda が CORS ヘッダーを付与する必要がある
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? ''
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Credentials': 'true',
+}
+
+const respond = (statusCode: number, body: unknown): APIGatewayProxyResult => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...corsHeaders },
   body: JSON.stringify(body),
 })
 
-const err = (statusCode: number): APIGatewayProxyResultV2 =>
+const err = (statusCode: number): APIGatewayProxyResult =>
   respond(statusCode, { message: 'error' })
 
 // ─── Stats 計算 ──────────────────────────────────────────────────
@@ -99,9 +110,9 @@ const validatePostBody = (body: unknown): PostReviewBody | null => {
 // ─── Handler ─────────────────────────────────────────────────────
 
 export const handler = async (
-  event: APIGatewayProxyEventV2
-): Promise<APIGatewayProxyResultV2> => {
-  const method = event.requestContext.http.method
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> => {
+  const method = event.httpMethod
 
   // CC 手動レビュー結果を DynamoDB に保存
   if (method === 'POST') {

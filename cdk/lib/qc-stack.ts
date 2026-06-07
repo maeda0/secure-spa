@@ -4,6 +4,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as iam from 'aws-cdk-lib/aws-iam'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as logs from 'aws-cdk-lib/aws-logs'
+import * as apigateway from 'aws-cdk-lib/aws-apigateway'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
 
@@ -119,28 +120,48 @@ export class QcDashboardStack extends cdk.Stack {
 
     table.grantReadWriteData(apiFn)
 
-    const apiUrl = apiFn.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
-      cors: {
-        // ★ localhost オリジンのみ許可（* 禁止）
-        allowedOrigins: [allowedOrigin],
-        allowedMethods: [lambda.HttpMethod.GET, lambda.HttpMethod.POST],
-        allowedHeaders: ['Content-Type', 'Authorization'],
+    // ─── API Gateway REST API ─────────────────────────────────────
+    const api = new apigateway.RestApi(this, 'QcApi', {
+      restApiName: 'qc-dashboard-api',
+      description: 'QC Dashboard read/write API',
+      deployOptions: {
+        stageName: 'v1',
+      },
+      // OPTIONS は API Gateway の mock で処理（Lambda に到達しない）
+      defaultCorsPreflightOptions: {
+        allowOrigins: [allowedOrigin],
+        allowMethods: ['GET', 'POST', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization'],
         allowCredentials: true,
       },
     })
 
+    const apiIntegration = new apigateway.LambdaIntegration(apiFn, {
+      proxy: true,
+    })
+
+    // ルートリソースに GET / POST を追加（認可なし：Cognito 追加時に更新）
+    api.root.addMethod('GET', apiIntegration, { authorizationType: apigateway.AuthorizationType.NONE })
+    api.root.addMethod('POST', apiIntegration, { authorizationType: apigateway.AuthorizationType.NONE })
+
+    // ─── NagSuppressions ─────────────────────────────────────────
     NagSuppressions.addResourceSuppressions(apiFn, [
       { id: 'AwsSolutions-L1',   reason: 'Node.js 22.x is the latest runtime' },
       { id: 'AwsSolutions-IAM4', reason: 'AWSLambdaBasicExecutionRole is required for Lambda logging' },
       { id: 'AwsSolutions-IAM5', reason: 'DynamoDB GSI wildcard is required for index-level access' },
     ], true)
-    NagSuppressions.addResourceSuppressions(apiUrl, [
-      {
-        id: 'AwsSolutions-FU1',
-        reason: 'Read/write API; CORS restricted to localhost origin only',
-      },
-    ])
+
+    NagSuppressions.addResourceSuppressions(api, [
+      { id: 'AwsSolutions-APIG1', reason: 'Access logging not enabled to reduce cost in research environment' },
+      { id: 'AwsSolutions-APIG2', reason: 'Request validation handled in Lambda; API Gateway-level validation not required' },
+      { id: 'AwsSolutions-APIG3', reason: 'WAF is attached at CloudFront level (CdnStack); regional WAF on API GW not needed' },
+      { id: 'AwsSolutions-APIG6', reason: 'CloudWatch execution logging not enabled to reduce cost in research environment' },
+    ], true)
+
+    NagSuppressions.addResourceSuppressions(api.root, [
+      { id: 'AwsSolutions-APIG4', reason: 'Auth will be added in Cognito integration phase (Task #6)' },
+      { id: 'AwsSolutions-COG4',  reason: 'Cognito authorizer will be added in Task #6' },
+    ], true)
 
     // CDK 内部の LogRetention Lambda（logRetention prop が自動生成）の抑制
     NagSuppressions.addStackSuppressions(this, [
@@ -155,8 +176,8 @@ export class QcDashboardStack extends cdk.Stack {
     })
 
     new cdk.CfnOutput(this, 'ApiUrl', {
-      value: apiUrl.url,
-      description: 'フロントエンドが呼び出す API URL（VITE_API_BASE_URL に設定）',
+      value: api.url,
+      description: 'API Gateway URL（VITE_API_BASE_URL / CdnStack apiGatewayUrl に設定）',
     })
 
     new cdk.CfnOutput(this, 'TableName', {
