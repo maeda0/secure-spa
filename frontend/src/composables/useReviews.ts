@@ -31,6 +31,15 @@ const ReviewIssueSchema = z.object({
   category: z.string(),
 })
 
+const HumanValidationSchema = z.object({
+  validatedAt:    z.string(),
+  validatedBy:    z.string(),
+  truePositives:  z.number(),
+  falsePositives: z.number(),
+  falseNegatives: z.number(),
+  notes:          z.string(),
+})
+
 const ReviewRecordSchema = z.object({
   PK: z.string(),
   SK: z.string(),
@@ -48,7 +57,8 @@ const ReviewRecordSchema = z.object({
   prAuthor: z.string(),
   repoFullName: z.string(),
   reviewedAt: z.string(),
-  stride: StrideAssessmentSchema.optional(),
+  stride:     StrideAssessmentSchema.optional(),
+  validation: HumanValidationSchema.optional(),
 })
 
 const ReviewsResponseSchema = z.object({
@@ -73,6 +83,42 @@ export type ReviewRecord      = z.infer<typeof ReviewRecordSchema>
 export type StatsResponse     = z.infer<typeof StatsResponseSchema>
 export type StrideAssessment  = z.infer<typeof StrideAssessmentSchema>
 export type StrideRisk        = z.infer<typeof StrideRiskSchema>
+export type HumanValidation   = z.infer<typeof HumanValidationSchema>
+
+// ─── 精度集計 ─────────────────────────────────────────────────────────
+
+export interface AccuracyMetrics {
+  count: number
+  totalTP: number
+  totalFP: number
+  totalFN: number
+  precision: number  // 0–100
+  recall: number     // 0–100
+  f1: number         // 0–100
+}
+
+export const calcAccuracy = (reviews: ReviewRecord[]): AccuracyMetrics | null => {
+  const validated = reviews.filter(r => r.validation)
+  if (validated.length === 0) return null
+
+  const totalTP = validated.reduce((s, r) => s + r.validation!.truePositives, 0)
+  const totalFP = validated.reduce((s, r) => s + r.validation!.falsePositives, 0)
+  const totalFN = validated.reduce((s, r) => s + r.validation!.falseNegatives, 0)
+
+  const precision = totalTP + totalFP > 0 ? totalTP / (totalTP + totalFP) : 0
+  const recall    = totalTP + totalFN > 0 ? totalTP / (totalTP + totalFN) : 0
+  const f1        = precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0
+
+  return {
+    count: validated.length,
+    totalTP,
+    totalFP,
+    totalFN,
+    precision: Math.round(precision * 100),
+    recall:    Math.round(recall * 100),
+    f1:        Math.round(f1 * 100),
+  }
+}
 
 // ─── 最新レビュー一覧 ─────────────────────────────────────────────
 

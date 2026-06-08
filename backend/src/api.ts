@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
-import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
+import { DynamoDBDocumentClient, QueryCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
-import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue, StrideRisk, StrideAssessment } from './types'
+import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue, StrideRisk, StrideAssessment, HumanValidation } from './types'
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}))
 
@@ -132,6 +132,40 @@ export const handler = async (
       rawBody = JSON.parse(event.body ?? '{}')
     } catch {
       return err(400)
+    }
+
+    // ─── 精度評価アクション ─────────────────────────────────────────
+    if (rawBody && typeof rawBody === 'object' && (rawBody as Record<string, unknown>).action === 'validate') {
+      const b = rawBody as Record<string, unknown>
+      if (
+        typeof b.pk !== 'string' || typeof b.sk !== 'string' ||
+        !Number.isInteger(b.truePositives)  || (b.truePositives  as number) < 0 ||
+        !Number.isInteger(b.falsePositives) || (b.falsePositives as number) < 0 ||
+        !Number.isInteger(b.falseNegatives) || (b.falseNegatives as number) < 0
+      ) return err(400)
+
+      const validation: HumanValidation = {
+        validatedAt:    new Date().toISOString(),
+        validatedBy:    typeof b.validatedBy === 'string' ? b.validatedBy : 'anonymous',
+        truePositives:  b.truePositives  as number,
+        falsePositives: b.falsePositives as number,
+        falseNegatives: b.falseNegatives as number,
+        notes:          typeof b.notes === 'string' ? b.notes : '',
+      }
+
+      try {
+        await dynamo.send(new UpdateCommand({
+          TableName: process.env.TABLE_NAME!,
+          Key: { PK: b.pk, SK: b.sk },
+          UpdateExpression: 'SET #val = :val',
+          ExpressionAttributeNames: { '#val': 'validation' },
+          ExpressionAttributeValues: { ':val': validation },
+        }))
+      } catch {
+        return err(500)
+      }
+
+      return respond(200, { message: 'validated' })
     }
 
     const data = validatePostBody(rawBody)

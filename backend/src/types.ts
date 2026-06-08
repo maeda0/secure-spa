@@ -33,6 +33,15 @@ export interface CcReviewData {
   issues: ReviewIssue[]
 }
 
+export interface HumanValidation {
+  validatedAt: string    // ISO 8601
+  validatedBy: string    // 評価者名
+  truePositives: number  // CC が正しく指摘した問題数
+  falsePositives: number // CC が誤って指摘した問題数
+  falseNegatives: number // CC が見落とした問題数（人間が発見）
+  notes: string
+}
+
 // DynamoDB に保存するレビュー記録
 export interface QcReviewRecord {
   PK: string          // REPO#owner/repo-name
@@ -46,7 +55,8 @@ export interface QcReviewRecord {
   repoFullName: string
   reviewedAt: string  // ISO 8601
   reviewComment: string
-  stride?: StrideAssessment  // 脅威モデル（任意）
+  stride?: StrideAssessment      // 脅威モデル（任意）
+  validation?: HumanValidation  // 人間による精度評価（任意）
 }
 
 // GitHub の issue_comment webhook ペイロード（必要フィールドのみ）

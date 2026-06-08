@@ -71,6 +71,17 @@ const date = (iso: string) => new Date(iso).toLocaleDateString('ja-JP')
       </div>
     </div>
 
+    <!-- 精度評価 -->
+    <div v-if="review.validation" class="mt-3 border-t border-gray-100 pt-3">
+      <div class="flex items-center gap-2 flex-wrap text-xs">
+        <span class="text-gray-400">精度評価:</span>
+        <span class="text-green-700 font-medium">TP {{ review.validation.truePositives }}</span>
+        <span class="text-red-600 font-medium">FP {{ review.validation.falsePositives }}</span>
+        <span class="text-orange-600 font-medium">FN {{ review.validation.falseNegatives }}</span>
+        <span class="text-gray-400 ml-auto">by {{ review.validation.validatedBy }}</span>
+      </div>
+    </div>
+
     <div v-if="review.issues.length > 0" class="mt-2 text-xs text-gray-500">
       {{ review.issues.length }} 件の指摘
     </div>

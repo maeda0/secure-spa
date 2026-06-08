@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useStats, useReviews, type StrideRisk } from '@/composables/useReviews'
+import { useStats, useReviews, calcAccuracy, type StrideRisk } from '@/composables/useReviews'
 import ReviewCard from '@/components/ReviewCard.vue'
 
 const { stats, loading: statsLoading } = useStats()
@@ -64,6 +64,8 @@ const strideSummary = computed(() => {
   }
   return { summary, count: strideReviews.length }
 })
+
+const accuracy = computed(() => calcAccuracy(reviews.value))
 
 const strideRiskColor = (risk: StrideRisk) => {
   if (risk === 'HIGH')   return 'bg-red-100 text-red-800 border-red-300'
@@ -190,6 +192,35 @@ const strideRiskColor = (risk: StrideRisk) => {
         </div>
       </div>
     </template>
+
+    <!-- CC レビュー精度メトリクス -->
+    <div v-if="accuracy" class="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 class="text-sm font-semibold text-gray-700 mb-1">CC レビュー精度</h2>
+      <p class="text-xs text-gray-400 mb-4">{{ accuracy.count }} 件の人間評価に基づく（TP {{ accuracy.totalTP }} / FP {{ accuracy.totalFP }} / FN {{ accuracy.totalFN }}）</p>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="text-center">
+          <p :class="['text-3xl font-bold', accuracy.precision >= 80 ? 'text-green-600' : accuracy.precision >= 50 ? 'text-yellow-600' : 'text-red-600']">
+            {{ accuracy.precision }}%
+          </p>
+          <p class="text-xs text-gray-500 mt-1">Precision</p>
+          <p class="text-xs text-gray-400">指摘の正確さ</p>
+        </div>
+        <div class="text-center">
+          <p :class="['text-3xl font-bold', accuracy.recall >= 80 ? 'text-green-600' : accuracy.recall >= 50 ? 'text-yellow-600' : 'text-red-600']">
+            {{ accuracy.recall }}%
+          </p>
+          <p class="text-xs text-gray-500 mt-1">Recall</p>
+          <p class="text-xs text-gray-400">問題の検出率</p>
+        </div>
+        <div class="text-center">
+          <p :class="['text-3xl font-bold', accuracy.f1 >= 80 ? 'text-green-600' : accuracy.f1 >= 50 ? 'text-yellow-600' : 'text-red-600']">
+            {{ accuracy.f1 }}%
+          </p>
+          <p class="text-xs text-gray-500 mt-1">F1 スコア</p>
+          <p class="text-xs text-gray-400">総合精度</p>
+        </div>
+      </div>
+    </div>
 
     <!-- STRIDE 脅威モデルサマリー -->
     <div v-if="strideSummary" class="bg-white rounded-lg border border-gray-200 p-6">
