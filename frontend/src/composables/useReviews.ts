@@ -1,8 +1,14 @@
 import { ref, computed, watch } from 'vue'
 import { z } from 'zod'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL as string
+
+const authHeaders = (): HeadersInit => {
+  const auth = useAuthStore()
+  return auth.idToken ? { Authorization: `Bearer ${auth.idToken}` } : {}
+}
 
 // ─── zod スキーマ（外部データのバリデーション）────────────────────
 
@@ -70,7 +76,8 @@ export const useReviews = (limit = 20) => {
     error.value = null
     try {
       const res = await window.fetch(
-        `${API_BASE}?repo=${encodeURIComponent(ui.selectedRepo)}&limit=${limit}`
+        `${API_BASE}?repo=${encodeURIComponent(ui.selectedRepo)}&limit=${limit}`,
+        { headers: authHeaders() }
       )
       if (!res.ok) throw new Error('fetch failed')
       const data = ReviewsResponseSchema.parse(await res.json())
@@ -102,7 +109,8 @@ export const useStats = () => {
     error.value = null
     try {
       const res = await window.fetch(
-        `${API_BASE}?repo=${encodeURIComponent(ui.selectedRepo)}&action=stats`
+        `${API_BASE}?repo=${encodeURIComponent(ui.selectedRepo)}&action=stats`,
+        { headers: authHeaders() }
       )
       if (!res.ok) throw new Error('fetch failed')
       stats.value = StatsResponseSchema.parse(await res.json())

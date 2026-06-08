@@ -12,7 +12,7 @@
         script-src 'self';
         style-src 'self' 'unsafe-inline';
         img-src 'self' data:;
-        connect-src 'self' %VITE_API_BASE_URL%;
+        connect-src 'self' %VITE_API_BASE_URL% https://cognito-idp.ap-northeast-1.amazonaws.com;
         frame-src 'none';
         object-src 'none';
       "

@@ -5,6 +5,7 @@ import * as iam from 'aws-cdk-lib/aws-iam'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as logs from 'aws-cdk-lib/aws-logs'
 import * as apigateway from 'aws-cdk-lib/aws-apigateway'
+import * as cognito from 'aws-cdk-lib/aws-cognito'
 import { NagSuppressions } from 'cdk-nag'
 import { Construct } from 'constructs'
 
@@ -91,6 +92,32 @@ export class QcDashboardStack extends cdk.Stack {
       },
     ])
 
+    // ─── Cognito User Pool ────────────────────────────────────────
+    const userPool = new cognito.UserPool(this, 'QcUserPool', {
+      userPoolName: 'qc-dashboard-users',
+      selfSignUpEnabled: false,
+      signInAliases: { email: true },
+      passwordPolicy: {
+        minLength: 12,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    })
+
+    const userPoolClient = new cognito.UserPoolClient(this, 'QcUserPoolClient', {
+      userPool,
+      userPoolClientName: 'qc-dashboard-spa',
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      generateSecret: false,
+    })
+
     // ─── 読み取り API Lambda ──────────────────────────────────────
     // GitHub Pages の URL（デプロイ後に実際の URL に変更する）
     // CORS origin must be scheme+host only (no path); derive it from the full Pages URL
@@ -120,6 +147,28 @@ export class QcDashboardStack extends cdk.Stack {
 
     table.grantReadWriteData(apiFn)
 
+    // ─── Lambda Authorizer ────────────────────────────────────────
+    const authorizerFn = new lambda.Function(this, 'AuthorizerHandler', {
+      functionName: 'qc-authorizer',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'authorizer.handler',
+      code: lambda.Code.fromAsset('../backend/dist'),
+      timeout: cdk.Duration.seconds(5),
+      memorySize: 128,
+      environment: {
+        USER_POOL_ID: userPool.userPoolId,
+        USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
+        NODE_OPTIONS: '--enable-source-maps',
+      },
+      logRetention: logs.RetentionDays.ONE_MONTH,
+    })
+
+    NagSuppressions.addResourceSuppressions(authorizerFn, [
+      { id: 'AwsSolutions-L1',   reason: 'Node.js 22.x is the latest runtime' },
+      { id: 'AwsSolutions-IAM4', reason: 'AWSLambdaBasicExecutionRole is required for Lambda logging' },
+    ], true)
+
     // ─── API Gateway REST API ─────────────────────────────────────
     const api = new apigateway.RestApi(this, 'QcApi', {
       restApiName: 'qc-dashboard-api',
@@ -140,9 +189,20 @@ export class QcDashboardStack extends cdk.Stack {
       proxy: true,
     })
 
-    // ルートリソースに GET / POST を追加（認可なし：Cognito 追加時に更新）
-    api.root.addMethod('GET', apiIntegration, { authorizationType: apigateway.AuthorizationType.NONE })
-    api.root.addMethod('POST', apiIntegration, { authorizationType: apigateway.AuthorizationType.NONE })
+    const tokenAuthorizer = new apigateway.TokenAuthorizer(this, 'QcTokenAuthorizer', {
+      handler: authorizerFn,
+      identitySource: 'method.request.header.Authorization',
+      resultsCacheTtl: cdk.Duration.minutes(5),
+    })
+
+    api.root.addMethod('GET', apiIntegration, {
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      authorizer: tokenAuthorizer,
+    })
+    api.root.addMethod('POST', apiIntegration, {
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
+      authorizer: tokenAuthorizer,
+    })
 
     // ─── NagSuppressions ─────────────────────────────────────────
     NagSuppressions.addResourceSuppressions(apiFn, [
@@ -158,9 +218,15 @@ export class QcDashboardStack extends cdk.Stack {
       { id: 'AwsSolutions-APIG6', reason: 'CloudWatch execution logging not enabled to reduce cost in research environment' },
     ], true)
 
+    NagSuppressions.addResourceSuppressions(userPool, [
+      { id: 'AwsSolutions-COG1', reason: 'MFA not required for this research tool; users are internal only' },
+      { id: 'AwsSolutions-COG2', reason: 'MFA not required for this research tool' },
+      { id: 'AwsSolutions-COG3', reason: 'CloudWatch logging not enabled to reduce cost in research environment' },
+      { id: 'AwsSolutions-COG8', reason: 'Plus tier not required for research environment; advanced threat detection is cost-prohibitive' },
+    ])
+
     NagSuppressions.addResourceSuppressions(api.root, [
-      { id: 'AwsSolutions-APIG4', reason: 'Auth will be added in Cognito integration phase (Task #6)' },
-      { id: 'AwsSolutions-COG4',  reason: 'Cognito authorizer will be added in Task #6' },
+      { id: 'AwsSolutions-COG4', reason: 'Lambda Token Authorizer validates Cognito ID tokens via aws-jwt-verify; equivalent security to Cognito User Pool Authorizer' },
     ], true)
 
     // CDK 内部の LogRetention Lambda（logRetention prop が自動生成）の抑制
@@ -188,6 +254,16 @@ export class QcDashboardStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebhookSecretPath', {
       value: webhookSecretParam.parameterName,
       description: 'cdk deploy 後にここへ GitHub Webhook シークレット値を設定する',
+    })
+
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: userPool.userPoolId,
+      description: 'Cognito User Pool ID（VITE_COGNITO_USER_POOL_ID に設定）',
+    })
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito App Client ID（VITE_COGNITO_CLIENT_ID に設定）',
     })
   }
 }
