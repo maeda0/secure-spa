@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb'
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda'
-import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue } from './types'
+import type { QcReviewRecord, Verdict, ReviewCategories, ReviewIssue, StrideRisk, StrideAssessment } from './types'
 
 const dynamo = DynamoDBDocumentClient.from(new DynamoDBClient({}))
 
@@ -67,6 +67,8 @@ const calcStats = (reviews: QcReviewRecord[]): Stats => {
 
 const VALID_VERDICTS: readonly Verdict[] = ['PASS', 'WARN', 'FAIL']
 const VALID_CATS = ['xss', 'auth', 'secrets', 'typescript', 'infra'] as const
+const VALID_STRIDE_RISKS: readonly StrideRisk[] = ['NONE', 'LOW', 'MEDIUM', 'HIGH']
+const STRIDE_KEYS = ['spoofing', 'tampering', 'repudiation', 'informationDisclosure', 'denialOfService', 'elevationOfPrivilege'] as const
 
 interface PostReviewBody {
   repo: string
@@ -77,6 +79,7 @@ interface PostReviewBody {
   categories: ReviewCategories
   issues?: ReviewIssue[]
   reviewComment?: string
+  stride?: StrideAssessment
 }
 
 const validatePostBody = (body: unknown): PostReviewBody | null => {
@@ -95,6 +98,13 @@ const validatePostBody = (body: unknown): PostReviewBody | null => {
     if (!(VALID_VERDICTS as readonly unknown[]).includes(cats[cat])) return null
   }
 
+  let stride: StrideAssessment | undefined
+  if (b.stride && typeof b.stride === 'object') {
+    const s = b.stride as Record<string, unknown>
+    const allValid = STRIDE_KEYS.every(k => (VALID_STRIDE_RISKS as readonly unknown[]).includes(s[k]))
+    if (allValid) stride = b.stride as StrideAssessment
+  }
+
   return {
     repo: b.repo,
     prNumber: b.prNumber,
@@ -104,6 +114,7 @@ const validatePostBody = (body: unknown): PostReviewBody | null => {
     categories: b.categories as ReviewCategories,
     issues: Array.isArray(b.issues) ? (b.issues as ReviewIssue[]) : [],
     reviewComment: typeof b.reviewComment === 'string' ? b.reviewComment : '',
+    stride,
   }
 }
 
@@ -139,6 +150,7 @@ export const handler = async (
       repoFullName: data.repo,
       reviewedAt,
       reviewComment: data.reviewComment ?? '',
+      ...(data.stride ? { stride: data.stride } : {}),
     }
 
     try {

@@ -12,7 +12,17 @@ const authHeaders = (): HeadersInit => {
 
 // ─── zod スキーマ（外部データのバリデーション）────────────────────
 
-const VerdictSchema = z.enum(['PASS', 'WARN', 'FAIL'])
+const VerdictSchema    = z.enum(['PASS', 'WARN', 'FAIL'])
+const StrideRiskSchema = z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH'])
+
+const StrideAssessmentSchema = z.object({
+  spoofing:              StrideRiskSchema,
+  tampering:             StrideRiskSchema,
+  repudiation:           StrideRiskSchema,
+  informationDisclosure: StrideRiskSchema,
+  denialOfService:       StrideRiskSchema,
+  elevationOfPrivilege:  StrideRiskSchema,
+})
 
 const ReviewIssueSchema = z.object({
   file: z.string(),
@@ -38,6 +48,7 @@ const ReviewRecordSchema = z.object({
   prAuthor: z.string(),
   repoFullName: z.string(),
   reviewedAt: z.string(),
+  stride: StrideAssessmentSchema.optional(),
 })
 
 const ReviewsResponseSchema = z.object({
@@ -58,8 +69,10 @@ const StatsResponseSchema = z.object({
   passRate: z.number(),
 })
 
-export type ReviewRecord = z.infer<typeof ReviewRecordSchema>
-export type StatsResponse = z.infer<typeof StatsResponseSchema>
+export type ReviewRecord      = z.infer<typeof ReviewRecordSchema>
+export type StatsResponse     = z.infer<typeof StatsResponseSchema>
+export type StrideAssessment  = z.infer<typeof StrideAssessmentSchema>
+export type StrideRisk        = z.infer<typeof StrideRiskSchema>
 
 // ─── 最新レビュー一覧 ─────────────────────────────────────────────
 

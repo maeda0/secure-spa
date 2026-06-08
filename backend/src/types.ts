@@ -1,5 +1,16 @@
 export type Verdict = 'PASS' | 'WARN' | 'FAIL'
 
+export type StrideRisk = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH'
+
+export interface StrideAssessment {
+  spoofing:             StrideRisk  // S: なりすまし
+  tampering:            StrideRisk  // T: 改ざん
+  repudiation:          StrideRisk  // R: 否認
+  informationDisclosure: StrideRisk // I: 情報漏洩
+  denialOfService:      StrideRisk  // D: サービス妨害
+  elevationOfPrivilege: StrideRisk  // E: 権限昇格
+}
+
 export interface ReviewCategories {
   xss: Verdict
   auth: Verdict
@@ -35,6 +46,7 @@ export interface QcReviewRecord {
   repoFullName: string
   reviewedAt: string  // ISO 8601
   reviewComment: string
+  stride?: StrideAssessment  // 脅威モデル（任意）
 }
 
 // GitHub の issue_comment webhook ペイロード（必要フィールドのみ）

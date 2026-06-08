@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useStats, useReviews } from '@/composables/useReviews'
+import { useStats, useReviews, type StrideRisk } from '@/composables/useReviews'
 import ReviewCard from '@/components/ReviewCard.vue'
 
 const { stats, loading: statsLoading } = useStats()
@@ -36,6 +36,41 @@ const sortedReviews = computed(() =>
 )
 
 const recentReviews = computed(() => sortedReviews.value.slice(-5))
+
+// STRIDE: STRIDE データを持つレビューの最高リスクを集計
+const STRIDE_KEYS = ['spoofing', 'tampering', 'repudiation', 'informationDisclosure', 'denialOfService', 'elevationOfPrivilege'] as const
+const STRIDE_LABELS: Record<string, string> = {
+  spoofing:              'S: なりすまし',
+  tampering:             'T: 改ざん',
+  repudiation:           'R: 否認',
+  informationDisclosure: 'I: 情報漏洩',
+  denialOfService:       'D: DoS',
+  elevationOfPrivilege:  'E: 権限昇格',
+}
+const RISK_ORDER: Record<StrideRisk, number> = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 }
+
+const strideSummary = computed(() => {
+  const strideReviews = reviews.value.filter(r => r.stride)
+  if (strideReviews.length === 0) return null
+
+  const summary: Record<string, StrideRisk> = {}
+  for (const key of STRIDE_KEYS) {
+    let max: StrideRisk = 'NONE'
+    for (const r of strideReviews) {
+      const v = r.stride![key] as StrideRisk
+      if (RISK_ORDER[v] > RISK_ORDER[max]) max = v
+    }
+    summary[key] = max
+  }
+  return { summary, count: strideReviews.length }
+})
+
+const strideRiskColor = (risk: StrideRisk) => {
+  if (risk === 'HIGH')   return 'bg-red-100 text-red-800 border-red-300'
+  if (risk === 'MEDIUM') return 'bg-orange-100 text-orange-800 border-orange-300'
+  if (risk === 'LOW')    return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+  return 'bg-gray-100 text-gray-500 border-gray-200'
+}
 </script>
 
 <template>
@@ -155,6 +190,22 @@ const recentReviews = computed(() => sortedReviews.value.slice(-5))
         </div>
       </div>
     </template>
+
+    <!-- STRIDE 脅威モデルサマリー -->
+    <div v-if="strideSummary" class="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 class="text-sm font-semibold text-gray-700 mb-1">STRIDE 脅威モデルサマリー</h2>
+      <p class="text-xs text-gray-400 mb-4">{{ strideSummary.count }} 件のレビューで記録された最高リスクレベル</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div
+          v-for="(risk, key) in strideSummary.summary"
+          :key="key"
+          :class="['rounded border px-3 py-2', strideRiskColor(risk as StrideRisk)]"
+        >
+          <p class="text-xs font-medium">{{ STRIDE_LABELS[key] ?? key }}</p>
+          <p class="text-lg font-bold mt-0.5">{{ risk }}</p>
+        </div>
+      </div>
+    </div>
 
     <!-- 最新レビュー -->
     <div>
