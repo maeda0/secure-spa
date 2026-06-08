@@ -80,6 +80,8 @@ interface PostReviewBody {
   issues?: ReviewIssue[]
   reviewComment?: string
   stride?: StrideAssessment
+  phase?: 'before' | 'after'
+  reviewMinutes?: number
 }
 
 const validatePostBody = (body: unknown): PostReviewBody | null => {
@@ -105,6 +107,11 @@ const validatePostBody = (body: unknown): PostReviewBody | null => {
     if (allValid) stride = b.stride as StrideAssessment
   }
 
+  const phase = b.phase === 'before' || b.phase === 'after' ? b.phase : undefined
+  const reviewMinutes = typeof b.reviewMinutes === 'number' && b.reviewMinutes > 0
+    ? Math.round(b.reviewMinutes)
+    : undefined
+
   return {
     repo: b.repo,
     prNumber: b.prNumber,
@@ -115,6 +122,8 @@ const validatePostBody = (body: unknown): PostReviewBody | null => {
     issues: Array.isArray(b.issues) ? (b.issues as ReviewIssue[]) : [],
     reviewComment: typeof b.reviewComment === 'string' ? b.reviewComment : '',
     stride,
+    phase,
+    reviewMinutes,
   }
 }
 
@@ -184,7 +193,9 @@ export const handler = async (
       repoFullName: data.repo,
       reviewedAt,
       reviewComment: data.reviewComment ?? '',
-      ...(data.stride ? { stride: data.stride } : {}),
+      ...(data.stride         ? { stride: data.stride }                 : {}),
+      ...(data.phase          ? { phase: data.phase }                   : {}),
+      ...(data.reviewMinutes  ? { reviewMinutes: data.reviewMinutes }   : {}),
     }
 
     try {

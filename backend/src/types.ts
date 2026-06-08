@@ -57,6 +57,8 @@ export interface QcReviewRecord {
   reviewComment: string
   stride?: StrideAssessment      // 脅威モデル（任意）
   validation?: HumanValidation  // 人間による精度評価（任意）
+  phase?: 'before' | 'after'   // CC 導入フェーズ（before: 導入前 / after: 導入後）
+  reviewMinutes?: number        // レビューにかかった時間（分）
 }
 
 // GitHub の issue_comment webhook ペイロード（必要フィールドのみ）

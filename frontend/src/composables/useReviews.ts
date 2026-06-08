@@ -57,8 +57,10 @@ const ReviewRecordSchema = z.object({
   prAuthor: z.string(),
   repoFullName: z.string(),
   reviewedAt: z.string(),
-  stride:     StrideAssessmentSchema.optional(),
-  validation: HumanValidationSchema.optional(),
+  stride:        StrideAssessmentSchema.optional(),
+  validation:    HumanValidationSchema.optional(),
+  phase:         z.enum(['before', 'after']).optional(),
+  reviewMinutes: z.number().optional(),
 })
 
 const ReviewsResponseSchema = z.object({
@@ -95,6 +97,58 @@ export interface AccuracyMetrics {
   precision: number  // 0–100
   recall: number     // 0–100
   f1: number         // 0–100
+}
+
+// ─── Before/After 比較 ───────────────────────────────────────────────
+
+export interface PhaseStats {
+  count: number
+  passRate: number
+  avgMinutes: number | null
+  failCount: number
+  warnCount: number
+}
+
+export interface BeforeAfterComparison {
+  before: PhaseStats
+  after: PhaseStats
+  passRateDelta: number    // after - before（ポイント差）
+  timeDelta: number | null // after - before（分差、負なら短縮）
+}
+
+const calcPhaseStats = (reviews: ReviewRecord[]): PhaseStats => {
+  const n = reviews.length
+  if (n === 0) return { count: 0, passRate: 0, avgMinutes: null, failCount: 0, warnCount: 0 }
+  const pass = reviews.filter(r => r.verdict === 'PASS').length
+  const timed = reviews.filter(r => r.reviewMinutes !== undefined)
+  return {
+    count: n,
+    passRate: Math.round(pass / n * 100),
+    avgMinutes: timed.length > 0
+      ? Math.round(timed.reduce((s, r) => s + r.reviewMinutes!, 0) / timed.length)
+      : null,
+    failCount: reviews.filter(r => r.verdict === 'FAIL').length,
+    warnCount: reviews.filter(r => r.verdict === 'WARN').length,
+  }
+}
+
+export const calcBeforeAfter = (reviews: ReviewRecord[]): BeforeAfterComparison | null => {
+  const before = reviews.filter(r => r.phase === 'before')
+  const after  = reviews.filter(r => r.phase === 'after')
+  if (before.length === 0 && after.length === 0) return null
+
+  const bs = calcPhaseStats(before)
+  const as_ = calcPhaseStats(after)
+  const timeDelta = bs.avgMinutes !== null && as_.avgMinutes !== null
+    ? as_.avgMinutes - bs.avgMinutes
+    : null
+
+  return {
+    before: bs,
+    after: as_,
+    passRateDelta: as_.passRate - bs.passRate,
+    timeDelta,
+  }
 }
 
 export const calcAccuracy = (reviews: ReviewRecord[]): AccuracyMetrics | null => {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useStats, useReviews, calcAccuracy, type StrideRisk } from '@/composables/useReviews'
+import { useStats, useReviews, calcAccuracy, calcBeforeAfter, type StrideRisk } from '@/composables/useReviews'
 import ReviewCard from '@/components/ReviewCard.vue'
 
 const { stats, loading: statsLoading } = useStats()
@@ -65,7 +65,8 @@ const strideSummary = computed(() => {
   return { summary, count: strideReviews.length }
 })
 
-const accuracy = computed(() => calcAccuracy(reviews.value))
+const accuracy    = computed(() => calcAccuracy(reviews.value))
+const beforeAfter = computed(() => calcBeforeAfter(reviews.value))
 
 const strideRiskColor = (risk: StrideRisk) => {
   if (risk === 'HIGH')   return 'bg-red-100 text-red-800 border-red-300'
@@ -192,6 +193,56 @@ const strideRiskColor = (risk: StrideRisk) => {
         </div>
       </div>
     </template>
+
+    <!-- Before/After 比較 -->
+    <div v-if="beforeAfter" class="bg-white rounded-lg border border-gray-200 p-6">
+      <h2 class="text-sm font-semibold text-gray-700 mb-4">QCフロー Before / After 比較</h2>
+      <div class="grid grid-cols-3 gap-4">
+        <!-- Before -->
+        <div class="bg-gray-50 rounded p-4">
+          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">CC 導入前</p>
+          <p class="text-2xl font-bold text-gray-800">{{ beforeAfter.before.passRate }}%</p>
+          <p class="text-xs text-gray-500">PASS 率（{{ beforeAfter.before.count }}件）</p>
+          <div class="mt-2 text-xs text-gray-500 space-y-0.5">
+            <p>WARN {{ beforeAfter.before.warnCount }} / FAIL {{ beforeAfter.before.failCount }}</p>
+            <p v-if="beforeAfter.before.avgMinutes !== null">平均 {{ beforeAfter.before.avgMinutes }} 分</p>
+          </div>
+        </div>
+
+        <!-- Delta -->
+        <div class="flex flex-col items-center justify-center gap-2">
+          <div :class="[
+            'text-center rounded-lg px-3 py-2 w-full',
+            beforeAfter.passRateDelta > 0 ? 'bg-green-50' : beforeAfter.passRateDelta < 0 ? 'bg-red-50' : 'bg-gray-50'
+          ]">
+            <p :class="['text-xl font-bold', beforeAfter.passRateDelta > 0 ? 'text-green-600' : beforeAfter.passRateDelta < 0 ? 'text-red-600' : 'text-gray-600']">
+              {{ beforeAfter.passRateDelta > 0 ? '+' : '' }}{{ beforeAfter.passRateDelta }}pt
+            </p>
+            <p class="text-xs text-gray-500">PASS 率変化</p>
+          </div>
+          <div v-if="beforeAfter.timeDelta !== null" :class="[
+            'text-center rounded-lg px-3 py-2 w-full',
+            beforeAfter.timeDelta < 0 ? 'bg-green-50' : beforeAfter.timeDelta > 0 ? 'bg-red-50' : 'bg-gray-50'
+          ]">
+            <p :class="['text-xl font-bold', beforeAfter.timeDelta < 0 ? 'text-green-600' : beforeAfter.timeDelta > 0 ? 'text-red-600' : 'text-gray-600']">
+              {{ beforeAfter.timeDelta > 0 ? '+' : '' }}{{ beforeAfter.timeDelta }}分
+            </p>
+            <p class="text-xs text-gray-500">レビュー時間変化</p>
+          </div>
+        </div>
+
+        <!-- After -->
+        <div class="bg-blue-50 rounded p-4">
+          <p class="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-3">CC 導入後</p>
+          <p class="text-2xl font-bold text-blue-800">{{ beforeAfter.after.passRate }}%</p>
+          <p class="text-xs text-blue-500">PASS 率（{{ beforeAfter.after.count }}件）</p>
+          <div class="mt-2 text-xs text-blue-500 space-y-0.5">
+            <p>WARN {{ beforeAfter.after.warnCount }} / FAIL {{ beforeAfter.after.failCount }}</p>
+            <p v-if="beforeAfter.after.avgMinutes !== null">平均 {{ beforeAfter.after.avgMinutes }} 分</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- CC レビュー精度メトリクス -->
     <div v-if="accuracy" class="bg-white rounded-lg border border-gray-200 p-6">

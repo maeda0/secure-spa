@@ -9,7 +9,8 @@
  *     --verdict PASS \
  *     --xss PASS --auth WARN --secrets PASS --typescript PASS --infra PASS \
  *     --comment "認証のセッション管理に懸念あり" \
- *     --stride-s NONE --stride-t LOW --stride-r NONE --stride-i LOW --stride-d NONE --stride-e NONE
+ *     --stride-s NONE --stride-t LOW --stride-r NONE --stride-i LOW --stride-d NONE --stride-e NONE \
+ *     --phase after --minutes 15
  *
  * 認証 (いずれかの方法で):
  *   1. --token <Cognito ID Token>
@@ -88,8 +89,10 @@ const REPO      = args.repo ?? env.VITE_DEFAULT_REPO
 const PR_NUMBER = Number(args.pr)
 const PR_TITLE  = args.title ?? `PR #${PR_NUMBER}`
 const PR_AUTHOR = args.author ?? process.env.USERNAME ?? 'maeda0'
-const VERDICT   = args.verdict ?? 'PASS'
-const COMMENT   = args.comment ?? ''
+const VERDICT        = args.verdict ?? 'PASS'
+const COMMENT        = args.comment ?? ''
+const PHASE          = args.phase  // 'before' | 'after' | undefined
+const REVIEW_MINUTES = args.minutes ? Number(args.minutes) : undefined
 
 const VERDICTS = ['PASS', 'WARN', 'FAIL']
 const RISKS    = ['NONE', 'LOW', 'MEDIUM', 'HIGH']
@@ -192,7 +195,9 @@ const body = {
   categories,
   issues: [],
   reviewComment: COMMENT,
-  ...(stride ? { stride } : {}),
+  ...(stride         ? { stride }                             : {}),
+  ...(PHASE          ? { phase: PHASE }                       : {}),
+  ...(REVIEW_MINUTES ? { reviewMinutes: REVIEW_MINUTES }      : {}),
 }
 
 console.log('送信データ:')
